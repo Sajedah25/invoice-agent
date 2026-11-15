@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from datetime import datetime
 
@@ -30,7 +31,9 @@ def init_db():
                 total TEXT,
                 currency TEXT,
                 data_json TEXT,
-                processed_at TEXT NOT NULL
+                processed_at TEXT NOT NULL,
+                review_note TEXT,
+                reviewed_at TEXT
             );
 
             CREATE TABLE IF NOT EXISTS checks (
@@ -88,12 +91,43 @@ def save_unread(source_file, read_method, status, reason):
     return cur.lastrowid
 
 
-def list_invoices():
+def list_invoices(status=None):
+    sql = ("SELECT id, source_file, status, supplier_name, invoice_number, total, processed_at "
+           "FROM invoices")
+    params = ()
+    if status:
+        sql += " WHERE status = ?"
+        params = (status,)
     with connect() as conn:
-        return conn.execute(
-            "SELECT id, source_file, status, supplier_name, invoice_number, total "
-            "FROM invoices ORDER BY id"
+        return conn.execute(sql + " ORDER BY id", params).fetchall()
+
+
+def get_invoice(invoice_id):
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM invoices WHERE id = ?", (invoice_id,)).fetchone()
+        if row is None:
+            return None
+        checks = conn.execute(
+            "SELECT name, passed, message FROM checks WHERE invoice_id = ? ORDER BY id",
+            (invoice_id,),
         ).fetchall()
+    invoice = dict(row)
+    raw = invoice.pop("data_json")
+    invoice["data"] = json.loads(raw) if raw else None
+    invoice["checks"] = [
+        {"name": c["name"], "passed": bool(c["passed"]), "message": c["message"]} for c in checks
+    ]
+    return invoice
+
+
+def review_invoice(invoice_id, decision, note):
+    now = datetime.now().isoformat(timespec="seconds")
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE invoices SET status = ?, review_note = ?, reviewed_at = ? WHERE id = ?",
+            (decision, note, now, invoice_id),
+        )
+    return cur.rowcount > 0
 
 
 if __name__ == "__main__":
