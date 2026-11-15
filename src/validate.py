@@ -77,14 +77,13 @@ def check_qr(inv, qr):
     return CheckResult("qr", True, "QR matches the invoice")
 
 
-def check_duplicate(inv, seen):
-    key = (inv.supplier_vat_number, inv.invoice_number)
-    if key in seen:
+def check_duplicate(inv, already_exists):
+    if already_exists:
         return CheckResult("duplicate", False, f"Duplicate: invoice {inv.invoice_number} from this supplier was already processed")
     return CheckResult("duplicate", True, "Not a duplicate")
 
 
-def validate_invoice(inv: Invoice, qr, seen):
+def validate_invoice(inv: Invoice, qr, already_exists):
     return [
         check_vat_number(inv),
         check_vat_math(inv),
@@ -92,7 +91,7 @@ def validate_invoice(inv: Invoice, qr, seen):
         check_line_items(inv),
         check_dates(inv),
         check_qr(inv, qr),
-        check_duplicate(inv, seen),
+        check_duplicate(inv, already_exists),
     ]
 
 
